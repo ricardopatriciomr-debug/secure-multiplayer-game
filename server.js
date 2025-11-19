@@ -12,13 +12,68 @@ const runner = require('./test-runner.js');
 
 const app = express();
 
+// Middleware to remove all caching headers
+app.use((req, res, next) => {
+  res.removeHeader = function(name) {
+    delete this._headers[name.toLowerCase()];
+    return this;
+  };
+  
+  const originalSend = res.send;
+  const originalSendFile = res.sendFile;
+  const originalJson = res.json;
+  
+  res.send = function(...args) {
+    res.removeHeader('ETag');
+    res.removeHeader('Last-Modified');
+    return originalSend.apply(res, args);
+  };
+  
+  res.sendFile = function(...args) {
+    const options = args[1] || {};
+    options.etag = false;
+    options.lastModified = false;
+    options.cacheControl = false;
+    args[1] = options;
+    
+    const callback = args[2] || function(err) {
+      if (err) next(err);
+    };
+    args[2] = function(err) {
+      res.removeHeader('ETag');
+      res.removeHeader('Last-Modified');
+      callback(err);
+    };
+    
+    return originalSendFile.apply(res, args);
+  };
+  
+  res.json = function(...args) {
+    res.removeHeader('ETag');
+    res.removeHeader('Last-Modified');
+    return originalJson.apply(res, args);
+  };
+  
+  next();
+});
+
 app.use(helmet.noSniff());
 app.use(helmet.xssFilter());
 app.use(helmet.hidePoweredBy({ setTo: 'PHP 7.4.3' }));
 app.use(nocache());
 
-app.use('/public', express.static(process.cwd() + '/public'));
-app.use('/assets', express.static(process.cwd() + '/assets'));
+app.set('etag', false);
+
+app.use('/public', express.static(process.cwd() + '/public', {
+  etag: false,
+  lastModified: false,
+  cacheControl: false
+}));
+app.use('/assets', express.static(process.cwd() + '/assets', {
+  etag: false,
+  lastModified: false,
+  cacheControl: false
+}));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
