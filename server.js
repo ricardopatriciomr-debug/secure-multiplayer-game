@@ -12,8 +12,10 @@ const runner = require('./test-runner.js');
 
 const app = express();
 
-// Middleware to remove all caching headers
+// Middleware to remove all caching headers and add Pragma
 app.use((req, res, next) => {
+  res.setHeader('Pragma', 'no-cache');
+  
   res.removeHeader = function(name) {
     delete this._headers[name.toLowerCase()];
     return this;
